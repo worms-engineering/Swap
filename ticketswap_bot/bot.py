@@ -37,7 +37,11 @@ RESERVED_RE = re.compile(
     re.IGNORECASE,
 )
 CHECKOUT_URL_RE = re.compile(r"/(cart|checkout|basket|winkelmand|reserv)", re.IGNORECASE)
-CHALLENGE_RE = re.compile(r"captcha|are you human|verify you are|access denied|too many requests", re.IGNORECASE)
+CHALLENGE_RE = re.compile(
+    r"captcha|are you human|verify you are|verifying|unable to verify|access denied|too many requests"
+    r"|verifica in corso|impossibile verificare",
+    re.IGNORECASE,
+)
 
 LISTING_LINK_SELECTOR = 'a[href*="/listing/"]'
 
@@ -167,6 +171,13 @@ def check_challenge(page: Page, status: int | None) -> None:
         title = ""
     if CHALLENGE_RE.search(title):
         raise ChallengeDetected(title)
+    # Bot-protection pages are tiny; only scan short bodies to avoid false positives.
+    try:
+        body = page.inner_text("body", timeout=2000)
+    except Exception:
+        body = ""
+    if len(body) < 500 and CHALLENGE_RE.search(body):
+        raise ChallengeDetected(" ".join(body.split()))
 
 
 def load_event(page: Page, url: str) -> list[Listing]:
@@ -176,6 +187,7 @@ def load_event(page: Page, url: str) -> list[Listing]:
         page.wait_for_load_state("networkidle", timeout=8000)
     except PWTimeout:
         pass
+    check_challenge(page, None)
     return collect_listings(page)
 
 
@@ -277,7 +289,6 @@ def run(settings: Settings, *, keep_open: bool = True) -> list[Listing]:
         raise ValueError("nessun evento da monitorare")
     interval = max(settings.interval, MIN_INTERVAL)
     started = time.monotonic()
-    backoff = interval
     with sync_playwright() as pw:
         ctx = open_context(pw, settings.profile_dir, settings.headless)
         for i, target in enumerate(settings.targets):
@@ -294,20 +305,21 @@ def run(settings: Settings, *, keep_open: bool = True) -> list[Listing]:
                     for target in pending:
                         if _poll_target(target, settings.reserve_timeout) and settings.stop_after_first:
                             break
-                    backoff = interval
                 except ChallengeDetected as exc:
-                    backoff = min(backoff * 2, 600)
+                    # TicketSwap's bot protection blocked the browser: stop instead of
+                    # retrying, which would only keep hitting the block.
                     notify(
-                        "TicketSwap richiede una verifica",
-                        f"{exc}. Risolvila nel browser se richiesto; riprovo tra {backoff:.0f}s.",
+                        "TicketSwap ha bloccato il bot",
+                        f"Pagina di verifica anti-bot ({exc}). Il bot si ferma.",
                     )
+                    break
                 except PWTimeout as exc:
                     log.warning("Timeout di caricamento: %s", exc)
                 if settings.stop_after_first and any(t.reserved for t in settings.targets):
                     break
                 if all(t.reserved for t in settings.targets):
                     break
-                sleep_for = backoff * random.uniform(0.8, 1.2)
+                sleep_for = interval * random.uniform(0.8, 1.2)
                 log.debug("Attendo %.1fs", sleep_for)
                 time.sleep(sleep_for)
             reserved = [t.reserved for t in settings.targets if t.reserved]

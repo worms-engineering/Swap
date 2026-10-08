@@ -22,6 +22,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         "/listing/concerto/3/ccc": "listing_sold.html",
         "/listing/concerto/4/ddd": "listing.html",
         "/event/festival": "event2.html",
+        "/event/blocked": "blocked.html",
         "/listing/festival/7/ggg": "listing.html",
         "/listing/festival/8/hhh": "listing.html",
     }
@@ -91,3 +92,11 @@ def test_stops_when_nothing_matches(server, tmp_path, monkeypatch):
     target = bot.EventTarget(url=f"{server}/event/concerto", max_price=5)
     settings = make_settings(tmp_path, [target], interval=0.1, max_runtime=1)
     assert bot.run(settings, keep_open=False) == []
+
+
+def test_stops_on_bot_protection_page(server, tmp_path, monkeypatch):
+    notified = []
+    monkeypatch.setattr(bot, "notify", lambda title, msg: notified.append(title))
+    target = bot.EventTarget(url=f"{server}/event/blocked", max_price=100)
+    assert bot.run(make_settings(tmp_path, [target]), keep_open=False) == []
+    assert notified == ["TicketSwap ha bloccato il bot"]

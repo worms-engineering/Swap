@@ -12,8 +12,8 @@ lascia il browser aperto, così completi tu il pagamento.
 3. Scarta gli annunci venduti, già provati, sopra `--max-price` o con meno biglietti di `--quantity`.
 4. Apre l'annuncio più economico e preme "Acquista / Buy". Se TicketSwap conferma la prenotazione
    (URL del carrello/checkout o testo "reserved"/"riservato") ti avvisa.
-5. Se compare un captcha o un errore 403/429 **non prova ad aggirarlo**: ti avvisa e rallenta
-   (backoff esponenziale fino a 10 minuti). Risolvi tu la verifica nella finestra del browser.
+5. Se TicketSwap mostra una pagina di verifica anti-bot (captcha, "Verifying", errore 403/429) il bot
+   **si ferma** e ti avvisa: non prova ad aggirare la protezione.
 
 ## Installazione
 
