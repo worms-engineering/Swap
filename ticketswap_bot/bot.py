@@ -11,6 +11,8 @@ import logging
 import os
 import random
 import re
+import shutil
+import subprocess
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -72,6 +74,33 @@ class ChallengeDetected(RuntimeError):
     """TicketSwap showed a captcha / rate-limit page: the user must intervene."""
 
 
+def find_browser() -> str | None:
+    """Path of the browser to use: $TICKETSWAP_BOT_BROWSER, else an installed Google Chrome.
+
+    The same browser must be used for login and for the bot, because the saved
+    session (cookies) is encrypted per browser.
+    """
+    env = os.environ.get("TICKETSWAP_BOT_BROWSER")
+    if env:
+        return env
+    candidates = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        str(Path.home() / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+    ]
+    for var in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"):
+        base = os.environ.get(var)
+        if base:
+            candidates.append(str(Path(base) / "Google" / "Chrome" / "Application" / "chrome.exe"))
+    for path in candidates:
+        if Path(path).is_file():
+            return path
+    for name in ("google-chrome", "google-chrome-stable", "chrome"):
+        found = shutil.which(name)
+        if found:
+            return found
+    return None
+
+
 def open_context(pw, profile_dir: Path, headless: bool) -> BrowserContext:
     """Persistent profile so the TicketSwap login done by the user is reused."""
     profile_dir.mkdir(parents=True, exist_ok=True)
@@ -80,20 +109,45 @@ def open_context(pw, profile_dir: Path, headless: bool) -> BrowserContext:
         headless=headless,
         viewport={"width": 1280, "height": 900},
         locale="it-IT",
-        # Optional: use an installed Chrome/Chromium instead of Playwright's bundled one.
-        executable_path=os.environ.get("TICKETSWAP_BOT_BROWSER") or None,
+        executable_path=find_browser(),  # None = Playwright's bundled Chromium
     )
 
 
 def login(profile_dir: Path) -> None:
-    """Open TicketSwap so the user can log in manually; the session is saved in the profile."""
-    with sync_playwright() as pw:
-        ctx = open_context(pw, profile_dir, headless=False)
-        page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        page.goto(BASE_URL)
-        print("Effettua il login su TicketSwap nella finestra del browser.")
-        input("Quando hai finito premi INVIO qui per salvare la sessione... ")
-        ctx.close()
+    """Open TicketSwap so the user can log in manually; the session is saved in the profile.
+
+    Chrome is started as a plain process, not under automation: Google refuses
+    "Sign in with Google" in browsers controlled by Playwright.
+    """
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    browser = find_browser()
+    if browser is None:
+        print("Google Chrome non trovato: uso il browser integrato.\n"
+              "Il login con Google potrebbe essere bloccato: in quel caso installa Google Chrome\n"
+              "(https://www.google.com/chrome/) oppure accedi con email.")
+        with sync_playwright() as pw:
+            ctx = open_context(pw, profile_dir, headless=False)
+            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            page.goto(BASE_URL)
+            input("Effettua il login nella finestra del browser, poi premi INVIO qui... ")
+            ctx.close()
+        return
+
+    print("Si apre Google Chrome: accedi a TicketSwap (anche con Google),\n"
+          "poi CHIUDI la finestra di Chrome per salvare la sessione.")
+    started = time.monotonic()
+    proc = subprocess.Popen([
+        browser,
+        f"--user-data-dir={profile_dir}",
+        "--no-first-run",
+        "--no-default-browser-check",
+        BASE_URL,
+    ])
+    proc.wait()
+    if time.monotonic() - started < 5:
+        # Some launchers hand off to another process and return immediately.
+        input("Quando hai finito il login chiudi Chrome e premi INVIO qui... ")
+    print("Sessione salvata.")
 
 
 def collect_listings(page: Page) -> list[Listing]:

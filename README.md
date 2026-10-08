@@ -28,7 +28,7 @@ playwright install chromium
 ## Uso
 
 ```bash
-# 1. Login (una volta sola): si apre il browser, accedi a TicketSwap e premi INVIO nel terminale
+# 1. Login (una volta sola): si apre Google Chrome, accedi a TicketSwap e poi chiudi Chrome
 python -m ticketswap_bot login
 
 # 2. Monitora un evento
@@ -100,9 +100,18 @@ export TELEGRAM_BOT_TOKEN=...   # token del bot creato con @BotFather
 export TELEGRAM_CHAT_ID=...     # il tuo chat id
 ```
 
+### Login con Google
+
+Google blocca l'accesso dai browser controllati da programmi. Per questo il comando `login`
+apre il tuo **Google Chrome** normale (senza automazione) con un profilo separato dedicato al bot:
+accedi a TicketSwap anche con "Continua con Google", poi chiudi Chrome. Il bot userà poi lo stesso
+Chrome e lo stesso profilo, quindi resti loggato. Serve avere Google Chrome installato; se non viene
+trovato il bot usa il browser integrato e il login con Google potrebbe non funzionare (in quel caso
+accedi con email).
+
 ### Browser personalizzato
 
-Per usare un Chrome/Chromium già installato invece di quello di Playwright:
+Per usare un altro Chrome/Chromium (sia per il login sia per il bot):
 
 ```bash
 export TICKETSWAP_BOT_BROWSER=/percorso/di/chrome
