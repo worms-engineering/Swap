@@ -85,6 +85,10 @@
     return body.length < 500 && CHALLENGE_RE.test(body) ? body : null;
   };
 
+  const fmt = (n) => {
+    return n.toLocaleString(document.documentElement.lang || undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // Mode "frame": a hidden same-origin iframe, so listings rendered by
@@ -201,7 +205,7 @@
     if ("Notification" in window && Notification.permission === "granted") {
       const best = items[0];
       try {
-        const n = new Notification("Biglietto a " + best.price + " su TicketSwap!", {
+        const n = new Notification("Biglietto a " + fmt(best.price) + " su TicketSwap!", {
           body: best.text.slice(0, 120), requireInteraction: true,
         });
         n.onclick = () => { window.focus(); window.open(best.url, "_blank"); };
@@ -239,7 +243,7 @@
       a.href = m.url;
       a.target = "_blank";
       a.rel = "noopener";
-      a.textContent = "👉 " + m.price + (m.qty ? " · " + m.qty + " biglietto/i" : "") + " – apri e compra";
+      a.textContent = "👉 " + fmt(m.price) + (m.qty ? " · " + m.qty + " biglietto/i" : "") + " – apri e compra";
       a.style.cssText = "display:block;margin:4px 0;padding:6px 8px;background:#e8f8fe;border-radius:6px;color:#0077a8;font-weight:600;text-decoration:none";
       $("matches").appendChild(a);
     }
