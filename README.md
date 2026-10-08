@@ -7,8 +7,8 @@ lascia il browser aperto, così completi tu il pagamento.
 
 ## Come funziona
 
-1. Apre la pagina dell'evento in un browser Chromium con il tuo profilo salvato (resti loggato).
-2. Ogni `--interval` secondi (con un po' di variazione casuale) ricarica la pagina e legge gli annunci.
+1. Apre ogni evento in una scheda di Chromium con il tuo profilo salvato (resti loggato).
+2. Ogni `--interval` secondi (con un po' di variazione casuale) ricarica le pagine e legge gli annunci.
 3. Scarta gli annunci venduti, già provati, sopra `--max-price` o con meno biglietti di `--quantity`.
 4. Apre l'annuncio più economico e preme "Acquista / Buy". Se TicketSwap conferma la prenotazione
    (URL del carrello/checkout o testo "reserved"/"riservato") ti avvisa.
@@ -16,6 +16,8 @@ lascia il browser aperto, così completi tu il pagamento.
    (backoff esponenziale fino a 10 minuti). Risolvi tu la verifica nella finestra del browser.
 
 ## Installazione
+
+Serve Python 3.11 o superiore.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
@@ -34,9 +36,50 @@ python -m ticketswap_bot watch "https://www.ticketswap.com/event/nome-evento/...
     --max-price 80 --quantity 2 --interval 20
 ```
 
+### Più eventi e trigger price
+
+Il **trigger price** è il prezzo massimo per biglietto: il bot riserva solo annunci a quel
+prezzo o meno. Puoi monitorare più eventi contemporaneamente: ognuno ha la sua scheda nel
+browser e, quando uno viene riservato, quella scheda resta sul carrello per il pagamento
+mentre le altre continuano a controllare.
+
+Stesso prezzo per tutti gli eventi:
+
+```bash
+python -m ticketswap_bot watch URL_EVENTO_1 URL_EVENTO_2 --trigger-price 60
+```
+
+Prezzo e quantità diversi per ogni evento, con un file TOML (vedi `events.example.toml`):
+
+```toml
+interval = 20
+
+[[event]]
+url = "https://www.ticketswap.com/event/nome-evento-1/..."
+max_price = 80
+quantity = 2
+
+[[event]]
+url = "https://www.ticketswap.com/event/nome-evento-2/..."
+max_price = 45
+```
+
+```bash
+python -m ticketswap_bot watch --config events.toml
+```
+
+Gli URL passati da riga di comando si possono aggiungere a quelli del file: `--trigger-price`
+e `--quantity` valgono solo per questi URL, gli eventi del file mantengono i propri valori.
+Con `--stop-after-first` il bot si ferma alla prima prenotazione.
+
+L'intervallo vale per ogni giro di controlli su tutti gli eventi: con molti eventi le richieste
+a TicketSwap aumentano, quindi non scendere troppo con `--interval`.
+
 | Opzione | Descrizione |
 | --- | --- |
-| `--max-price` | Prezzo massimo **per biglietto** (stessa valuta mostrata sul sito) |
+| `--max-price` / `--trigger-price` | Prezzo massimo **per biglietto** (stessa valuta mostrata sul sito) |
+| `-c`, `--config` | File TOML con più eventi e prezzi diversi |
+| `--stop-after-first` | Fermati dopo la prima prenotazione |
 | `--quantity` | Numero di biglietti (default 1) |
 | `--interval` | Secondi tra un controllo e l'altro (default 20, minimo 5) |
 | `--max-runtime` | Ferma il bot dopo N minuti |

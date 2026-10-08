@@ -1,0 +1,18 @@
+# Copia questo file (es. events.toml) e lancia:
+#   python -m ticketswap_bot watch --config events.toml
+
+interval = 20            # secondi tra un giro di controlli e l'altro
+# max_runtime = 120      # minuti, poi il bot si ferma
+# stop_after_first = true  # fermati alla prima prenotazione
+
+# Valori di default per tutti gli eventi (sovrascrivibili per evento)
+quantity = 1
+
+[[event]]
+url = "https://www.ticketswap.com/event/nome-evento-1/..."
+max_price = 80           # trigger price: riserva solo a 80 o meno per biglietto
+quantity = 2
+
+[[event]]
+url = "https://www.ticketswap.com/event/nome-evento-2/..."
+max_price = 45

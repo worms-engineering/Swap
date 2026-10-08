@@ -41,16 +41,31 @@ LISTING_LINK_SELECTOR = 'a[href*="/listing/"]'
 
 
 @dataclass
-class Settings:
-    event_url: str
-    max_price: float | None = None
+class EventTarget:
+    """One event (or ticket type) to watch, with its own trigger price."""
+
+    url: str
+    max_price: float | None = None  # trigger price per ticket
     quantity: int = 1
+    seen: set[str] = field(default_factory=set)
+    reserved: Listing | None = None
+    page: Page | None = field(default=None, repr=False)
+
+    @property
+    def label(self) -> str:
+        parts = [p for p in self.url.split("?")[0].rstrip("/").split("/") if p]
+        return parts[-2] if len(parts) >= 2 and parts[-2] != "event" else parts[-1]
+
+
+@dataclass
+class Settings:
+    targets: list[EventTarget]
     interval: float = 20.0
     profile_dir: Path = Path.home() / ".ticketswap-bot" / "profile"
     headless: bool = False
     max_runtime: float | None = None  # seconds; None = forever
     reserve_timeout: float = 15.0
-    seen: set[str] = field(default_factory=set)
+    stop_after_first: bool = False
 
 
 class ChallengeDetected(RuntimeError):
@@ -175,39 +190,56 @@ def wait_for_user(ctx: BrowserContext) -> None:
         pass  # browser closed by the user
 
 
-def run(settings: Settings, *, keep_open: bool = True) -> Listing | None:
-    """Poll the event page until a listing is reserved. Returns the reserved listing."""
+def _poll_target(target: EventTarget, timeout: float) -> bool:
+    """Check one event once; returns True if a listing got reserved."""
+    page = target.page
+    listings = load_event(page, target.url)
+    candidates = select_candidates(
+        listings, max_price=target.max_price, quantity=target.quantity, seen=target.seen
+    )
+    log.info("[%s] %d annunci trovati, %d compatibili.", target.label, len(listings), len(candidates))
+    for listing in candidates:
+        if try_reserve(page, listing, target.quantity, timeout):
+            target.reserved = listing
+            notify(
+                f"Biglietti riservati su TicketSwap! ({target.label})",
+                f"{listing.url}\nPrezzo: {listing.price}\n"
+                "Completa il pagamento prima che la prenotazione scada.",
+            )
+            page.bring_to_front()
+            return True
+        target.seen.add(listing.url)
+    return False
+
+
+def run(settings: Settings, *, keep_open: bool = True) -> list[Listing]:
+    """Poll every target until each one is reserved (or time runs out).
+
+    Each event gets its own tab: once a listing is reserved that tab is left on
+    the cart for the user to pay, while the other tabs keep watching.
+    Returns the reserved listings.
+    """
+    if not settings.targets:
+        raise ValueError("nessun evento da monitorare")
     interval = max(settings.interval, MIN_INTERVAL)
     started = time.monotonic()
     backoff = interval
     with sync_playwright() as pw:
         ctx = open_context(pw, settings.profile_dir, settings.headless)
-        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        for i, target in enumerate(settings.targets):
+            target.page = ctx.pages[0] if i == 0 and ctx.pages else ctx.new_page()
         try:
             while True:
+                pending = [t for t in settings.targets if t.reserved is None]
+                if not pending:
+                    break
                 if settings.max_runtime is not None and time.monotonic() - started > settings.max_runtime:
                     log.info("Tempo massimo raggiunto, mi fermo.")
-                    return None
+                    break
                 try:
-                    listings = load_event(page, settings.event_url)
-                    candidates = select_candidates(
-                        listings,
-                        max_price=settings.max_price,
-                        quantity=settings.quantity,
-                        seen=settings.seen,
-                    )
-                    log.info("%d annunci trovati, %d compatibili.", len(listings), len(candidates))
-                    for listing in candidates:
-                        if try_reserve(page, listing, settings.quantity, settings.reserve_timeout):
-                            notify(
-                                "Biglietti riservati su TicketSwap!",
-                                f"{listing.url}\nPrezzo: {listing.price}\n"
-                                "Completa il pagamento prima che la prenotazione scada.",
-                            )
-                            if keep_open and not settings.headless:
-                                wait_for_user(ctx)
-                            return listing
-                        settings.seen.add(listing.url)
+                    for target in pending:
+                        if _poll_target(target, settings.reserve_timeout) and settings.stop_after_first:
+                            break
                     backoff = interval
                 except ChallengeDetected as exc:
                     backoff = min(backoff * 2, 600)
@@ -217,9 +249,17 @@ def run(settings: Settings, *, keep_open: bool = True) -> Listing | None:
                     )
                 except PWTimeout as exc:
                     log.warning("Timeout di caricamento: %s", exc)
+                if settings.stop_after_first and any(t.reserved for t in settings.targets):
+                    break
+                if all(t.reserved for t in settings.targets):
+                    break
                 sleep_for = backoff * random.uniform(0.8, 1.2)
                 log.debug("Attendo %.1fs", sleep_for)
-                page.wait_for_timeout(sleep_for * 1000)
+                time.sleep(sleep_for)
+            reserved = [t.reserved for t in settings.targets if t.reserved]
+            if reserved and keep_open and not settings.headless:
+                wait_for_user(ctx)
+            return reserved
         finally:
             try:
                 ctx.close()
