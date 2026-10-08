@@ -64,3 +64,24 @@ def test_cli_merges_urls_and_config(tmp_path, monkeypatch):
 def test_cli_requires_a_target():
     with pytest.raises(SystemExit):
         main(["watch"])
+
+
+@pytest.mark.parametrize("argv", [
+    ["-v", "watch", URL1],
+    ["watch", URL1, "-v"],
+])
+def test_cli_verbose_anywhere(monkeypatch, argv, tmp_path):
+    captured = {}
+    monkeypatch.setattr("ticketswap_bot.bot.run", lambda s: captured.setdefault("s", s) and [])
+    main(argv + ["--profile", str(tmp_path)])
+    assert captured["s"].profile_dir == tmp_path
+
+
+def test_cli_accepts_non_event_ticketswap_urls(monkeypatch):
+    captured = {}
+    monkeypatch.setattr("ticketswap_bot.bot.run", lambda s: captured.setdefault("s", s) and [])
+    url = "https://www.ticketswap.it/sport-tickets/nitto-atp-finals-2026-torino-2026-11-15-X/monday-16-11-night/5743309"
+    main(["watch", url, "--trigger-price", "100", "--quantity", "1", "--stop-after-first", "-v"])
+    t = captured["s"].targets[0]
+    assert (t.url, t.max_price, t.quantity) == (url, 100, 1)
+    assert captured["s"].stop_after_first

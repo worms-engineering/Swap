@@ -12,18 +12,24 @@ from .config import ConfigError, load_config, make_target
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Shared options, accepted both before and after the subcommand.
+    # SUPPRESS keeps a subcommand from resetting a value given before it.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--profile", type=Path, default=argparse.SUPPRESS,
+                        help="cartella del profilo browser (contiene la sessione di login)")
+    common.add_argument("-v", "--verbose", action="store_true", default=argparse.SUPPRESS,
+                        help="log dettagliati")
     parser = argparse.ArgumentParser(
         prog="ticketswap_bot",
         description="Riserva biglietti su TicketSwap; il pagamento resta manuale.",
+        parents=[common],
     )
-    parser.add_argument("--profile", type=Path, default=bot.Settings.__dataclass_fields__["profile_dir"].default,
-                        help="cartella del profilo browser (contiene la sessione di login)")
-    parser.add_argument("-v", "--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("login", help="apre il browser per effettuare il login una volta")
+    sub.add_parser("login", parents=[common], help="apre il browser per effettuare il login una volta")
 
-    watch = sub.add_parser("watch", help="monitora uno o più eventi e riserva i biglietti compatibili")
+    watch = sub.add_parser("watch", parents=[common],
+                           help="monitora uno o più eventi e riserva i biglietti compatibili")
     watch.add_argument("event_urls", nargs="*", metavar="URL",
                        help="URL delle pagine evento / tipo di biglietto su TicketSwap")
     watch.add_argument("-c", "--config", type=Path,
@@ -39,6 +45,8 @@ def main(argv: list[str] | None = None) -> int:
     watch.add_argument("--headless", action="store_true", help="browser invisibile (sconsigliato)")
 
     args = parser.parse_args(argv)
+    args.verbose = getattr(args, "verbose", False)
+    args.profile = getattr(args, "profile", bot.Settings.__dataclass_fields__["profile_dir"].default)
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
