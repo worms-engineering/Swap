@@ -28,6 +28,15 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("login", parents=[common], help="apre il browser per effettuare il login una volta")
 
+    bm = sub.add_parser("bookmarklet", parents=[common],
+                        help="crea la pagina con il segnalibro che suona quando un biglietto arriva al tuo prezzo")
+    bm.add_argument("--max-price", "--trigger-price", dest="max_price", type=float,
+                    help="prezzo massimo per biglietto (se omesso il segnalibro lo chiede ogni volta)")
+    bm.add_argument("--quantity", type=int, default=1, help="numero di biglietti (default 1)")
+    bm.add_argument("--interval", type=float, default=20, help="secondi tra un controllo e l'altro (minimo 10)")
+    bm.add_argument("-o", "--output", type=Path, default=Path("bookmarklet.html"), help="file da creare")
+    bm.add_argument("--no-open", action="store_true", help="non aprire la pagina nel browser")
+
     watch = sub.add_parser("watch", parents=[common],
                            help="monitora uno o più eventi e riserva i biglietti compatibili")
     watch.add_argument("event_urls", nargs="*", metavar="URL",
@@ -55,6 +64,21 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "login":
         bot.login(args.profile)
+        return 0
+
+    if args.command == "bookmarklet":
+        from .bookmarklet import build_page
+
+        if args.quantity < 1:
+            parser.error("--quantity deve essere almeno 1")
+        args.output.write_text(
+            build_page(args.max_price, max(args.interval, 10), args.quantity), encoding="utf-8"
+        )
+        print(f"Creato {args.output.resolve()}: aprilo e trascina il pulsante nella barra dei preferiti.")
+        if not args.no_open:
+            import webbrowser
+
+            webbrowser.open(args.output.resolve().as_uri())
         return 0
 
     targets: list[bot.EventTarget] = []

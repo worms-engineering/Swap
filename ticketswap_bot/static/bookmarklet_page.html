@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TicketSwap Alert</title>
+<style>
+  :root { --bg:#f6f8fa; --card:#fff; --text:#111; --muted:#5b6470; --accent:#00b6f0; --line:#dde3ea; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111418; --card:#1b2026; --text:#eef1f4; --muted:#9aa4af; --line:#2c333b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:32px 16px 48px; }
+  h1 { font-size:28px; margin:0 0 4px; }
+  p.lead { color:var(--muted); margin:0 0 24px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:16px; }
+  .card h2 { font-size:18px; margin:0 0 12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  label { display:block; font-size:14px; color:var(--muted); }
+  input { width:100%; margin-top:4px; padding:10px; font:inherit; color:var(--text); background:var(--bg);
+          border:1px solid var(--line); border-radius:8px; }
+  .drag { display:inline-block; margin:8px 0; padding:14px 22px; background:var(--accent); color:#fff;
+          font-weight:700; font-size:18px; border-radius:999px; text-decoration:none; cursor:grab; }
+  .hint { font-size:14px; color:var(--muted); }
+  ol { padding-left:22px; margin:0; } li { margin:6px 0; }
+  kbd { border:1px solid var(--line); border-bottom-width:2px; border-radius:4px; padding:0 5px; font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🎟️ TicketSwap Alert</h1>
+  <p class="lead">Un segnalibro che controlla gli annunci di un evento ogni ~20 secondi e suona un allarme
+    quando un biglietto arriva al tuo prezzo. Non compra nulla da solo: l'acquisto lo fai tu.</p>
+
+  <section class="card">
+    <h2>1. Imposta il segnalibro</h2>
+    <div class="grid">
+      <label>Trigger price (€ per biglietto)
+        <input id="price" type="number" min="1" step="0.01" placeholder="chiedi ogni volta" value="{{PRICE}}"></label>
+      <label>Biglietti
+        <input id="qty" type="number" min="1" step="1" value="{{QUANTITY}}"></label>
+      <label>Controllo ogni (secondi)
+        <input id="interval" type="number" min="10" step="1" value="{{INTERVAL}}"></label>
+    </div>
+    <p class="hint">Se lasci vuoto il prezzo, il segnalibro te lo chiede ogni volta che lo clicchi
+      (comodo per usarlo su eventi diversi).</p>
+  </section>
+
+  <section class="card">
+    <h2>2. Trascinalo nella barra dei preferiti</h2>
+    <a id="bm" class="drag" href="{{HREF}}" onclick="event.preventDefault(); alert('Non cliccarlo qui: trascinalo nella barra dei preferiti.');">🎟️ TicketSwap Alert</a>
+    <p class="hint">Non vedi la barra dei preferiti? Premi <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>
+      (Mac: <kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>). Se cambi le impostazioni qui sopra,
+      trascina di nuovo il pulsante.</p>
+  </section>
+
+  <section class="card">
+    <h2>3. Usalo</h2>
+    <ol>
+      <li>Apri TicketSwap nel tuo browser, accedi e vai alla pagina dell'evento (quella con l'elenco degli annunci).</li>
+      <li>Clicca il segnalibro <b>🎟️ TicketSwap Alert</b>: in basso a destra compare un riquadro.
+        Premi <b>🔊 Test suono</b> per verificare l'audio e consenti le notifiche se il browser lo chiede.</li>
+      <li>Lascia la scheda aperta e visibile, meglio in una finestra tutta sua (se la riduci a icona
+        il browser può rallentare i controlli a uno al minuto).</li>
+      <li>Quando suona, clicca il link nel riquadro, apri l'annuncio e compra tu.</li>
+    </ol>
+    <p class="hint">Se TicketSwap mostra una pagina di verifica, il segnalibro si ferma da solo:
+      ricarica la pagina, controlla che il sito funzioni e riattivalo. Per un altro evento apri
+      un'altra scheda e clicca il segnalibro anche lì.</p>
+  </section>
+</main>
+<script>
+  const SOURCE = {{SOURCE}};
+  const $ = (id) => document.getElementById(id);
+  function update() {
+    const price = parseFloat($("price").value);
+    const cfg = {
+      maxPrice: price > 0 ? price : null,
+      interval: Math.max(parseFloat($("interval").value) || 20, 10),
+      quantity: Math.max(parseInt($("qty").value, 10) || 1, 1),
+    };
+    $("bm").href = "javascript:" + encodeURIComponent(SOURCE.replace("__CONFIG__", JSON.stringify(cfg)));
+    $("bm").textContent = "🎟️ TicketSwap Alert" + (cfg.maxPrice ? " ≤ " + cfg.maxPrice + "€" : "");
+  }
+  ["price", "qty", "interval"].forEach((id) => $(id).addEventListener("input", update));
+  update();
+</script>
+</body>
+</html>

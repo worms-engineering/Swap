@@ -5,7 +5,28 @@ il primo biglietto compatibile con i tuoi criteri. Il bot **non paga mai**: quan
 biglietti sono nel carrello (TicketSwap li blocca per qualche minuto) ti avvisa e
 lascia il browser aperto, così completi tu il pagamento.
 
-## Come funziona
+## Segnalibro "TicketSwap Alert" (consigliato)
+
+TicketSwap blocca i browser automatizzati, quindi il modo che funziona davvero è un **segnalibro**
+che gira nel tuo browser normale, dove sei già loggato. Controlla gli annunci ogni ~20 secondi e,
+quando un biglietto arriva al tuo prezzo, suona un allarme, mostra una notifica e ti dà il link
+all'annuncio. **Non compra nulla da solo**: apri l'annuncio e acquisti tu. Se TicketSwap mostra una
+pagina di verifica il segnalibro si ferma.
+
+1. Apri il file `bookmarklet.html` (doppio clic) nel browser.
+2. Inserisci il trigger price (o lascialo vuoto per sceglierlo ogni volta), poi trascina il pulsante
+   blu nella barra dei preferiti.
+3. Vai sulla pagina dell'evento su TicketSwap e clicca il segnalibro.
+
+Per rigenerare la pagina con valori predefiniti diversi:
+`python -m ticketswap_bot bookmarklet --trigger-price 100 --quantity 2`.
+
+## Bot automatico (Playwright)
+
+Nota: nei test reali TicketSwap ha bloccato questo bot con la sua protezione anti-bot. Il bot si
+ferma quando succede; usa il segnalibro qui sopra.
+
+## Come funziona il bot
 
 1. Apre ogni evento in una scheda di Chromium con il tuo profilo salvato (resti loggato).
 2. Ogni `--interval` secondi (con un po' di variazione casuale) ricarica le pagine e legge gli annunci.
