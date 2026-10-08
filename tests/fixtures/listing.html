@@ -1,0 +1,7 @@
+<!doctype html><html><head><title>Listing - TicketSwap</title></head><body>
+<select id="qty"><option value="1">1</option><option value="2">2</option></select>
+<button id="buy" onclick="
+  window.__qty = document.getElementById('qty').value;
+  setTimeout(() => { history.pushState({}, '', '/cart'); document.body.insertAdjacentHTML('beforeend', '<p>Your tickets are reserved</p>'); }, 200);
+">Buy tickets</button>
+</body></html>
