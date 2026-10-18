@@ -25,8 +25,13 @@ LISTINGS = {
 }
 
 
+DEFAULT_CARDS = [(1, 1, "99,19"), (2, 2, "110,00"), (3, 1, "140,00")]
+
+
 class State:
     blocked = False
+    event_blocked = False
+    cards: list = []
     hits: collections.Counter = collections.Counter()
 
 
@@ -36,9 +41,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         State.hits[path] += 1
         if State.blocked and path.startswith("/listing/"):
             body = "<html><head><title>Verifying</title></head><body>Unable to verify.</body></html>"
+        elif path == "/event/x" and State.event_blocked:
+            body = "<html><head><title>Verifying</title></head><body>Unable to verify.</body></html>"
         elif path == "/event/x":
-            cards = CARD.format(id=1, qty=1, price="99,19") + CARD.format(id=2, qty=2, price="110,00") + \
-                CARD.format(id=3, qty=1, price="140,00")
+            cards = "".join(CARD.format(id=i, qty=q, price=p) for i, q, p in State.cards)
             body = f"<html lang='it'><head><title>Evento</title></head><body><h1>Evento</h1><div id='list'>{cards}</div></body></html>"
         elif path in LISTINGS:
             body = f"<html><head><title>Annuncio</title></head><body><h1>Annuncio</h1>{LISTINGS[path]}</body></html>"
@@ -59,6 +65,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 @pytest.fixture
 def page():
     State.blocked = False
+    State.event_blocked = False
+    State.cards = list(DEFAULT_CARDS)
     State.hits = collections.Counter()
     httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
@@ -76,10 +84,12 @@ def page():
     httpd.shutdown()
 
 
-def run(page):
+def run(page, refresh=0):
     page.evaluate("window.__tsPricesGapMs = 50")
+    # Tests refresh fast; the real minimum is 20 s.
+    js = prices_js(refresh).replace('{"refresh":', '{"_minRefresh": 0.2, "refresh":', 1)
     # The bookmarklet's promise never settles (its worker keeps running): don't await it.
-    page.evaluate("src => { (0, eval)(src); }", prices_js())
+    page.evaluate("src => { (0, eval)(src); }", js)
 
 
 def badges(page):
@@ -153,3 +163,50 @@ def test_close_removes_everything(page):
     page.click('#ts-prices-panel [data-a="close"]')
     assert badges(page) == []
     assert page.evaluate("window.__tsPrices === undefined")
+
+
+def event_hits():
+    return State.hits["/event/x"]
+
+
+def test_refresh_shows_new_and_drops_removed_listings(page):
+    run(page, refresh=0.5)
+    wait_done(page)
+    page.wait_for_function("() => window.__tsPrices.refreshes >= 1")
+    assert "nuovo" not in page.inner_text("#ts-prices-panel")  # baseline: nothing is new yet
+    State.cards = [(1, 1, "99,19"), (3, 1, "140,00"), (4, 1, "45,00")]  # 2 sold, 4 listed
+    page.wait_for_function("() => document.getElementById('ts-prices-panel').innerText.includes('-10%')", timeout=15000)
+    panel = page.inner_text("#ts-prices-panel")
+    assert "🆕 1 nuovo annuncio" in panel
+    assert "🆕 45,00 € (originale 50,00 €, -10%)" in panel
+    assert "110,00" not in panel  # removed listing no longer offered as a deal
+    assert "🔄 aggiornato alle" in panel
+
+
+def test_refresh_reads_listings_not_rendered_on_screen(page):
+    # The site renders only part of the list; the background read sees all of it.
+    page.evaluate("document.querySelector('a[href=\"/listing/x/3/h\"]').remove()")
+    run(page, refresh=30)
+    wait_done(page, 2)
+    page.wait_for_function("() => document.getElementById('ts-prices-panel').innerText.includes('Letti 3/3')", timeout=15000)
+    assert "nuovo" not in page.inner_text("#ts-prices-panel")
+
+
+def test_refresh_off(page):
+    before = event_hits()
+    run(page, refresh=0)
+    wait_done(page)
+    page.wait_for_timeout(1000)
+    assert event_hits() == before
+    assert "🔄" not in page.inner_text("#ts-prices-panel")
+
+
+def test_refresh_stops_on_verification_page(page):
+    run(page, refresh=0.3)
+    wait_done(page)
+    State.event_blocked = True
+    page.wait_for_function("() => !window.__tsPrices.running", timeout=15000)
+    assert "verifica" in page.inner_text("#ts-prices-panel")
+    hits = event_hits()
+    page.wait_for_timeout(1000)
+    assert event_hits() == hits

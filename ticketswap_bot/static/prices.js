@@ -3,9 +3,12 @@
 // pause between requests), finds the original ticket price the seller entered
 // and shows it under the listing with the difference in %, so good deals stand
 // out. Results are cached in the browser so each listing is read only once.
-// Stops if TicketSwap shows its verification page.
+// Every CFG.refresh seconds it re-reads the event page in the background, so
+// new listings show up in the panel. Stops if TicketSwap shows its verification page.
+// __CONFIG__ is replaced by the generator with {refresh}.
 (async () => {
   /*@common*/
+  const CFG = __CONFIG__;
   if (window.__tsPrices) {
     window.__tsPrices.panel.style.display = "block";
     return;
@@ -15,6 +18,8 @@
     return;
   }
 
+  const REFRESH_S = CFG.refresh > 0 ? Math.max(CFG.refresh, CFG._minRefresh || 20) : 0;
+  const pageUrl = location.href.split("#")[0];
   const GAP_MS = window.__tsPricesGapMs != null ? window.__tsPricesGapMs : 1200;
   const CACHE_KEY = "tsOriginalPrices.v1";
   const MISS_TTL = 24 * 3600 * 1000; // re-check listings without an original price after a day
@@ -47,7 +52,7 @@
   };
 
   const extractOriginal = (html, doc, ref) => {
-    const body = doc.body ? textOf(doc.body).replace(/ /g, " ") : "";
+    const body = doc.body ? textOf(doc.body).replace(/\u00a0/g, " ") : "";
     const m = LABEL_RE.exec(body);
     if (m) {
       const after = body.slice(m.index + m[0].length, m.index + m[0].length + 60);
@@ -101,19 +106,30 @@
   };
 
   const queue = [];
+  const cardInfo = (a) => {
+    const text = textOf(a).replace(/\u00a0/g, " ").replace(/Prezzo originale.*$|Originale .*$/, "");
+    const p = PRICE_RE.exec(text), cur = /[€£$]/.exec(text);
+    return {
+      url: new URL(a.getAttribute("href"), pageUrl).href.split(/[?#]/)[0],
+      price: p ? parseAmount(p[1] || p[2]) : null,
+      currency: cur ? cur[0] : "€",
+      sold: SOLD_RE.test(text),
+    };
+  };
+  const addListing = (info, isNew) => {
+    let c = cards.get(info.url);
+    if (!c) {
+      c = { price: info.price, currency: info.currency, sold: info.sold, anchors: new Set(), isNew, gone: false };
+      cards.set(info.url, c);
+      if (cached(info.url) === undefined) queue.push(info.url);
+    }
+    return c;
+  };
   const scan = () => {
     for (const a of document.querySelectorAll(LINK_SEL)) {
-      const u = new URL(a.getAttribute("href"), location.href).href.split(/[?#]/)[0];
-      let c = cards.get(u);
-      if (!c) {
-        const text = textOf(a).replace(/ /g, " ").replace(/Prezzo originale.*$|Originale .*$/, "");
-        const p = PRICE_RE.exec(text), cur = /[€£$]/.exec(text);
-        c = { price: p ? parseAmount(p[1] || p[2]) : null, currency: cur ? cur[0] : "€", anchors: new Set(), sold: SOLD_RE.test(text) };
-        cards.set(u, c);
-        if (cached(u) === undefined) queue.push(u);
-      }
-      c.anchors.add(a);
-      paint(u);
+      const info = cardInfo(a);
+      addListing(info, false).anchors.add(a);
+      paint(info.url);
     }
     render();
   };
@@ -134,7 +150,7 @@
   document.body.appendChild(panel);
   const $ = (k) => panel.querySelector('[data-r="' + k + '"]');
 
-  const state = { running: true, panel, cards, fetched: 0, stopped: null };
+  const state = { running: true, panel, cards, fetched: 0, stopped: null, refreshes: 0, lastRefresh: null };
   window.__tsPrices = state;
 
   const render = () => {
@@ -143,14 +159,23 @@
     const found = known.filter((u) => cached(u) && cards.get(u).price);
     let status = "Letti " + known.length + "/" + urls.length + " annunci" +
       (found.length !== known.length ? " · " + found.length + " con prezzo originale" : "");
+    const fresh = urls.filter((u) => cards.get(u).isNew && !cards.get(u).gone).length;
+    if (REFRESH_S) {
+      status += "<br><small>🔄 " + (state.lastRefresh ? "aggiornato alle " + state.lastRefresh.toLocaleTimeString() + " · " : "") +
+        "ogni " + (REFRESH_S >= 60 && REFRESH_S % 60 === 0 ? REFRESH_S / 60 + " min" : REFRESH_S + " s") + "</small>";
+    }
+    if (fresh) {
+      status += '<br><b style="color:#11703a">🆕 ' + fresh + (fresh === 1 ? " nuovo annuncio" : " nuovi annunci") +
+        "</b> <small>(ricarica la pagina per vederli anche nella lista)</small>";
+    }
     if (state.stopped) status = '<span style="color:#e5243b">' + state.stopped + "</span><br>" + status;
     else if (known.length < urls.length) status = "⏳ " + status;
     $("status").innerHTML = status;
     const best = found
-      .filter((u) => !cards.get(u).sold)
+      .filter((u) => !cards.get(u).sold && !cards.get(u).gone)
       .map((u) => ({ u, c: cards.get(u), d: cards.get(u).price / cached(u) - 1 }))
       .sort((x, y) => x.d - y.d)
-      .slice(0, 3);
+      .slice(0, 5);
     $("best").innerHTML = best.length ? "<b>Migliori affari</b>" : "";
     for (const { u, c, d } of best) {
       const a = document.createElement("a");
@@ -158,7 +183,7 @@
       a.target = "_blank";
       a.rel = "noopener";
       const pct = Math.round(d * 100);
-      a.textContent = "👉 " + fmt(c.price) + " " + c.currency + " (originale " + fmt(cached(u)) + " " + c.currency + ", " + (pct > 0 ? "+" : "") + pct + "%)";
+      a.textContent = (c.isNew ? "🆕 " : "👉 ") + fmt(c.price) + " " + c.currency + " (originale " + fmt(cached(u)) + " " + c.currency + ", " + (pct > 0 ? "+" : "") + pct + "%)";
       a.style.cssText = "display:block;margin:4px 0;padding:6px 8px;background:#e8f8fe;border-radius:6px;color:#0077a8;font-weight:600;text-decoration:none";
       $("best").appendChild(a);
     }
@@ -177,11 +202,54 @@
   panel.querySelector('[data-a="hide"]').onclick = () => { panel.style.display = "none"; };
   panel.querySelector('[data-a="close"]').onclick = () => {
     state.running = false;
+    clearTimeout(state.refreshTimer);
+    loader.dispose();
     observer.disconnect();
     document.querySelectorAll(".ts-orig").forEach((b) => b.remove());
     panel.remove();
     delete window.__tsPrices;
   };
+
+  // ---------- periodic refresh of the event page ----------
+  const loader = makeLoader(pageUrl);
+  let refreshFailures = 0;
+  const refresh = async () => {
+    if (!state.running) return;
+    try {
+      const { doc, status } = await loader.load();
+      if (!state.running) return;
+      if (isChallenge(doc, status)) {
+        state.running = false;
+        state.stopped = "⛔ TicketSwap chiede una verifica: lettura fermata. Ricarica la pagina a mano prima di riprovare.";
+        render();
+        return;
+      }
+      refreshFailures = 0;
+      const present = new Set();
+      for (const a of doc.querySelectorAll(LINK_SEL)) {
+        const info = cardInfo(a);
+        present.add(info.url);
+        // The first read is the baseline: listings not yet rendered on screen are not "new".
+        const c = addListing(info, state.refreshes > 0);
+        c.price = info.price;
+        c.sold = info.sold;
+        c.gone = false;
+      }
+      // Only trust "gone" if the page could actually be read.
+      if (present.size) for (const [u, c] of cards) if (!present.has(u)) c.gone = true;
+      state.refreshes++;
+      state.lastRefresh = new Date();
+      render();
+    } catch (e) {
+      if (++refreshFailures >= 3) {
+        state.stopped = "⚠️ Aggiornamento automatico fermato (" + e.message + ").";
+        render();
+        return;
+      }
+    }
+    if (state.running) state.refreshTimer = setTimeout(refresh, REFRESH_S * 1000 * (0.8 + Math.random() * 0.4));
+  };
+  if (REFRESH_S) refresh();
 
   // ---------- worker: one listing at a time ----------
   scan();

@@ -28,6 +28,12 @@ ciascuno) e salva i risultati nel browser, quindi ogni annuncio viene letto una 
 annuncio non riporta il prezzo originale compare "n.d.". Il prezzo su TicketSwap include le
 commissioni, quindi anche un biglietto venduto al prezzo originale risulta qualche punto sopra lo 0%.
 
+Il segnalibro può anche **aggiornarsi da solo**: nella pagina di installazione scegli ogni quanti
+secondi (default 60, minimo 20, 0 = mai). Rilegge la lista degli annunci in background senza
+ricaricare la pagina: i nuovi annunci compaiono nel riquadro con 🆕 insieme al loro prezzo originale,
+mentre quelli venduti o rimossi spariscono dai migliori affari. Per vederli anche nella lista della
+pagina ricaricala e riclicca il segnalibro (un segnalibro si spegne quando la pagina viene ricaricata).
+
 Per rigenerare la pagina con valori predefiniti diversi:
 `python -m ticketswap_bot bookmarklet --trigger-price 100 --quantity 2`.
 

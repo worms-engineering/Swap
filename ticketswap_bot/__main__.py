@@ -34,6 +34,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="prezzo massimo per biglietto (se omesso il segnalibro lo chiede ogni volta)")
     bm.add_argument("--quantity", type=int, default=1, help="numero di biglietti (default 1)")
     bm.add_argument("--interval", type=float, default=20, help="secondi tra un controllo e l'altro (minimo 10)")
+    bm.add_argument("--refresh", type=float, default=60,
+                    help="secondi tra un aggiornamento e l'altro dei prezzi originali (0 = mai, minimo 20)")
     bm.add_argument("-o", "--output", type=Path, default=Path("bookmarklet.html"), help="file da creare")
     bm.add_argument("--no-open", action="store_true", help="non aprire la pagina nel browser")
 
@@ -72,7 +74,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.quantity < 1:
             parser.error("--quantity deve essere almeno 1")
         args.output.write_text(
-            build_page(args.max_price, max(args.interval, 10), args.quantity), encoding="utf-8"
+            build_page(args.max_price, max(args.interval, 10), args.quantity,
+                       max(args.refresh, 20) if args.refresh > 0 else 0),
+            encoding="utf-8",
         )
         print(f"Creato {args.output.resolve()}: aprilo e trascina il pulsante nella barra dei preferiti.")
         if not args.no_open:

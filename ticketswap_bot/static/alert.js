@@ -51,51 +51,6 @@
     return out;
   };
 
-  // Mode "frame": a hidden same-origin iframe, so listings rendered by
-  // JavaScript are visible. Mode "fetch": plain HTML, used if framing is refused.
-  let frame = null;
-  const loadFrame = () => new Promise((resolve, reject) => {
-    if (!frame) {
-      frame = document.createElement("iframe");
-      frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
-      frame.setAttribute("aria-hidden", "true");
-      frame.style.cssText = "position:fixed;left:-10000px;top:0;width:1200px;height:900px;border:0;";
-      document.body.appendChild(frame);
-    }
-    let done = false;
-    const finish = (fn, v) => { if (!done) { done = true; clearTimeout(to); fn(v); } };
-    const to = setTimeout(() => finish(reject, new Error("timeout")), 30000);
-    frame.onload = async () => {
-      let doc = null;
-      try { doc = frame.contentDocument; } catch (e) { /* cross-origin error page */ }
-      if (!doc || !doc.body || doc.location.href === "about:blank") return finish(reject, new Error("blocked"));
-      // Give client-side rendering time to add the listings.
-      const start = Date.now();
-      let last = -1;
-      while (!done && Date.now() - start < 8000) {
-        if (isChallenge(doc)) break;
-        const n = doc.querySelectorAll(LINK_SEL).length;
-        if (n > 0 && n === last && Date.now() - start > 1500) break;
-        last = n;
-        await sleep(500);
-      }
-      finish(resolve, { doc, status: 200 });
-    };
-    try {
-      if (frame.contentWindow && frame.contentDocument && frame.contentDocument.location.href !== "about:blank") {
-        frame.contentWindow.location.reload();
-        return;
-      }
-    } catch (e) { /* fall through to src */ }
-    frame.src = url;
-  });
-
-  const loadFetch = async () => {
-    const r = await fetch(url, { credentials: "include", cache: "no-store" });
-    const doc = new DOMParser().parseFromString(await r.text(), "text/html");
-    return { doc, status: r.status };
-  };
-
   // ---------- alarm ----------
   let audio = null;
   try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* no audio */ }
@@ -191,7 +146,7 @@
   btn("stop").onclick = () => {
     stop();
     silence();
-    if (frame) frame.remove();
+    loader.dispose();
     panel.remove();
     delete window.__tsAlert;
   };
@@ -209,35 +164,14 @@
     }
   };
 
-  const load = async () => {
-    if (state.mode === "fetch") return loadFetch();
-    try {
-      const r = await loadFrame();
-      if (!state.mode) {
-        state.mode = "frame";
-        // The frame may not show listings that plain HTML does: compare once.
-        if (!r.doc.querySelectorAll(LINK_SEL).length && !isChallenge(r.doc)) {
-          const f = await loadFetch().catch(() => null);
-          if (f && f.doc.querySelectorAll(LINK_SEL).length) {
-            state.mode = "fetch";
-            return f;
-          }
-        }
-      }
-      return r;
-    } catch (e) {
-      if (state.mode === "frame") throw e;
-      state.mode = "fetch";
-      if (frame) { frame.remove(); frame = null; }
-      return loadFetch();
-    }
-  };
+  const loader = makeLoader(url);
 
   let failures = 0;
   const tick = async () => {
     if (!state.running) return;
     try {
-      const { doc, status } = await load();
+      const { doc, status } = await loader.load();
+      state.mode = loader.mode;
       const challenge = isChallenge(doc, status);
       if (challenge) {
         stop("⛔ TicketSwap chiede una verifica. Monitoraggio fermato: ricarica la pagina a mano e, se tutto è ok, riattiva il segnalibro.");

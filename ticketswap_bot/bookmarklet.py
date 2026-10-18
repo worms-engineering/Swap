@@ -44,20 +44,24 @@ def bookmarklet_url(**cfg) -> str:
     return "javascript:" + urllib.parse.quote(bookmarklet_js(**cfg), safe="")
 
 
-def prices_js() -> str:
-    return minified_source("prices")
+def prices_js(refresh: float = 60) -> str:
+    """refresh: seconds between background re-reads of the event page (0 = off)."""
+    return minified_source("prices").replace(PLACEHOLDER, json.dumps({"refresh": refresh}), 1)
 
 
-def prices_url() -> str:
-    return "javascript:" + urllib.parse.quote(prices_js(), safe="")
+def prices_url(refresh: float = 60) -> str:
+    return "javascript:" + urllib.parse.quote(prices_js(refresh), safe="")
 
 
-def build_page(max_price: float | None = None, interval: float = 20, quantity: int = 1) -> str:
+def build_page(max_price: float | None = None, interval: float = 20, quantity: int = 1, refresh: float = 60) -> str:
     template = (STATIC / "bookmarklet_page.html").read_text(encoding="utf-8")
     src = json.dumps(minified_source()).replace("</", "<\\/")
+    prices_src = json.dumps(minified_source("prices")).replace("</", "<\\/")
     values = {
         "{{SOURCE}}": src,
-        "{{PRICES_HREF}}": html.escape(prices_url()),
+        "{{PRICES_SOURCE}}": prices_src,
+        "{{PRICES_HREF}}": html.escape(prices_url(refresh)),
+        "{{REFRESH}}": f"{refresh:g}",
         "{{HREF}}": html.escape(bookmarklet_url(max_price=max_price, interval=interval, quantity=quantity)),
         "{{PRICE}}": "" if max_price is None else f"{max_price:g}",
         "{{INTERVAL}}": f"{interval:g}",

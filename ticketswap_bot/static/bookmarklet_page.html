@@ -58,13 +58,18 @@
 
   <section class="card">
     <h2>Extra: prezzi originali</h2>
+    <div class="grid" style="margin-bottom:8px">
+      <label>Aggiorna ogni (secondi, 0 = mai)
+        <input id="refresh" type="number" min="0" step="1" value="{{REFRESH}}"></label>
+    </div>
     <a id="bm-prices" class="drag" href="{{PRICES_HREF}}" onclick="event.preventDefault(); alert('Non cliccarlo qui: trascinalo nella barra dei preferiti.');">💶 Prezzi originali</a>
     <p class="hint">Trascina anche questo nella barra dei preferiti. Sulla pagina dell'evento cliccalo: sotto ogni
       annuncio compare il prezzo originale del biglietto e la differenza in percentuale
       (<span style="color:#11703a">verde</span> = sotto il prezzo originale,
       <span style="color:#8a5a00">giallo</span> = fino al +10%, <span style="color:#a31b1b">rosso</span> = oltre).
       Legge gli annunci uno alla volta, quindi ci mette circa un secondo per annuncio; i risultati
-      restano salvati nel browser, così la volta dopo è immediato.</p>
+      restano salvati nel browser, così la volta dopo è immediato. Con l'aggiornamento attivo rilegge
+      la lista in background (minimo ogni 20 secondi): i nuovi annunci compaiono nel riquadro con 🆕.</p>
   </section>
 
   <section class="card">
@@ -84,6 +89,7 @@
 </main>
 <script>
   const SOURCE = {{SOURCE}};
+  const PRICES_SOURCE = {{PRICES_SOURCE}};
   const $ = (id) => document.getElementById(id);
   function update() {
     const price = parseFloat($("price").value);
@@ -95,8 +101,16 @@
     $("bm").href = "javascript:" + encodeURIComponent(SOURCE.replace("__CONFIG__", JSON.stringify(cfg)));
     $("bm").textContent = "🎟️ TicketSwap Alert" + (cfg.maxPrice ? " ≤ " + cfg.maxPrice + "€" : "");
   }
+  function updatePrices() {
+    const r = parseFloat($("refresh").value);
+    const refresh = r > 0 ? Math.max(r, 20) : 0;
+    $("bm-prices").href = "javascript:" + encodeURIComponent(PRICES_SOURCE.replace("__CONFIG__", JSON.stringify({ refresh })));
+    $("bm-prices").textContent = "💶 Prezzi originali" + (refresh ? " 🔄" + (refresh % 60 === 0 ? refresh / 60 + "min" : refresh + "s") : "");
+  }
   ["price", "qty", "interval"].forEach((id) => $(id).addEventListener("input", update));
+  $("refresh").addEventListener("input", updatePrices);
   update();
+  updatePrices();
 </script>
 </body>
 </html>

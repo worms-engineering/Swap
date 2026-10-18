@@ -40,3 +40,80 @@ const fmt = (n) => {
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Loads a fresh copy of an event page in the background.
+// Mode "frame": a hidden same-origin iframe, so listings rendered by
+// JavaScript are visible. Mode "fetch": plain HTML, used if framing is refused.
+const makeLoader = (url) => {
+  const self = { mode: null };
+  let frame = null;
+  const loadFrame = () => new Promise((resolve, reject) => {
+    if (!frame) {
+      frame = document.createElement("iframe");
+      frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
+      frame.setAttribute("aria-hidden", "true");
+      frame.style.cssText = "position:fixed;left:-10000px;top:0;width:1200px;height:900px;border:0;";
+      document.body.appendChild(frame);
+    }
+    let done = false;
+    const finish = (fn, v) => { if (!done) { done = true; clearTimeout(to); fn(v); } };
+    const to = setTimeout(() => finish(reject, new Error("timeout")), 30000);
+    frame.onload = async () => {
+      let doc = null;
+      try { doc = frame.contentDocument; } catch (e) { /* cross-origin error page */ }
+      if (!doc || !doc.body || doc.location.href === "about:blank") return finish(reject, new Error("blocked"));
+      // Give client-side rendering time to add the listings.
+      const start = Date.now();
+      let last = -1;
+      while (!done && Date.now() - start < 8000) {
+        if (isChallenge(doc)) break;
+        const n = doc.querySelectorAll(LINK_SEL).length;
+        if (n > 0 && n === last && Date.now() - start > 1500) break;
+        last = n;
+        await sleep(500);
+      }
+      finish(resolve, { doc, status: 200 });
+    };
+    try {
+      if (frame.contentWindow && frame.contentDocument && frame.contentDocument.location.href !== "about:blank") {
+        frame.contentWindow.location.reload();
+        return;
+      }
+    } catch (e) { /* fall through to src */ }
+    frame.src = url;
+  });
+
+  const loadFetch = async () => {
+    const r = await fetch(url, { credentials: "include", cache: "no-store" });
+    const doc = new DOMParser().parseFromString(await r.text(), "text/html");
+    return { doc, status: r.status };
+  };
+
+  const load = async () => {
+    if (self.mode === "fetch") return loadFetch();
+    try {
+      const r = await loadFrame();
+      if (!self.mode) {
+        self.mode = "frame";
+        // The frame may not show listings that plain HTML does: compare once.
+        if (!r.doc.querySelectorAll(LINK_SEL).length && !isChallenge(r.doc)) {
+          const f = await loadFetch().catch(() => null);
+          if (f && f.doc.querySelectorAll(LINK_SEL).length) {
+            self.mode = "fetch";
+            return f;
+          }
+        }
+      }
+      return r;
+    } catch (e) {
+      if (self.mode === "frame") throw e;
+      self.mode = "fetch";
+      if (frame) { frame.remove(); frame = null; }
+      return loadFetch();
+    }
+  };
+
+  self.load = load;
+  self.dispose = () => { if (frame) { frame.remove(); frame = null; } };
+  return self;
+};

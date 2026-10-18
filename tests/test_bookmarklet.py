@@ -163,3 +163,16 @@ def test_installer_page_has_prices_link(page, tmp_path):
     href = page.get_attribute("#bm-prices", "href")
     js = urllib.parse.unquote(href[len("javascript:"):])
     assert "tsOriginalPrices" in js and "/*@common*/" not in js
+
+
+@pytest.mark.parametrize("value,expected,label", [("120", 120, "🔄2min"), ("5", 20, "🔄20s"), ("0", 0, "")])
+def test_installer_page_prices_refresh(page, tmp_path, value, expected, label):
+    html_path = tmp_path / "bm.html"
+    html_path.write_text(build_page(), encoding="utf-8")
+    page.goto(html_path.as_uri())
+    assert "🔄1min" in page.inner_text("#bm-prices")  # default: every 60 s
+    page.fill("#refresh", value)
+    js = urllib.parse.unquote(page.get_attribute("#bm-prices", "href")[len("javascript:"):])
+    cfg = json.loads(js.split("const CFG = ", 1)[1].split(";", 1)[0])
+    assert cfg == {"refresh": expected}
+    assert page.inner_text("#bm-prices") == "💶 Prezzi originali" + (" " + label if label else "")
