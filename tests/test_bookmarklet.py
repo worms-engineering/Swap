@@ -154,3 +154,12 @@ def test_committed_page_is_up_to_date():
     assert (ROOT / "bookmarklet.html").read_text(encoding="utf-8") == build_page(), (
         "rigenera con: python -m ticketswap_bot bookmarklet --no-open"
     )
+
+
+def test_installer_page_has_prices_link(page, tmp_path):
+    html_path = tmp_path / "bm.html"
+    html_path.write_text(build_page(), encoding="utf-8")
+    page.goto(html_path.as_uri())
+    href = page.get_attribute("#bm-prices", "href")
+    js = urllib.parse.unquote(href[len("javascript:"):])
+    assert "tsOriginalPrices" in js and "/*@common*/" not in js

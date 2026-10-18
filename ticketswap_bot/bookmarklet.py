@@ -12,14 +12,20 @@ import json
 import urllib.parse
 from pathlib import Path
 
-SOURCE = Path(__file__).with_name("static") / "alert.js"
+STATIC = Path(__file__).with_name("static")
 PLACEHOLDER = "__CONFIG__"
+INCLUDE = "/*@common*/"
 
 
-def minified_source() -> str:
-    """alert.js without comment lines and indentation (newlines are kept, so ASI is unaffected)."""
+def minified_source(name: str = "alert") -> str:
+    """static/<name>.js with common.js inlined, without comment lines and indentation.
+
+    Newlines are kept, so automatic semicolon insertion is unaffected.
+    """
+    source = (STATIC / f"{name}.js").read_text(encoding="utf-8")
+    source = source.replace(INCLUDE, (STATIC / "common.js").read_text(encoding="utf-8"), 1)
     lines = []
-    for line in SOURCE.read_text(encoding="utf-8").splitlines():
+    for line in source.splitlines():
         line = line.strip()
         if line and not line.startswith("//"):
             lines.append(line)
@@ -38,11 +44,20 @@ def bookmarklet_url(**cfg) -> str:
     return "javascript:" + urllib.parse.quote(bookmarklet_js(**cfg), safe="")
 
 
+def prices_js() -> str:
+    return minified_source("prices")
+
+
+def prices_url() -> str:
+    return "javascript:" + urllib.parse.quote(prices_js(), safe="")
+
+
 def build_page(max_price: float | None = None, interval: float = 20, quantity: int = 1) -> str:
-    template = (Path(__file__).with_name("static") / "bookmarklet_page.html").read_text(encoding="utf-8")
+    template = (STATIC / "bookmarklet_page.html").read_text(encoding="utf-8")
     src = json.dumps(minified_source()).replace("</", "<\\/")
     values = {
         "{{SOURCE}}": src,
+        "{{PRICES_HREF}}": html.escape(prices_url()),
         "{{HREF}}": html.escape(bookmarklet_url(max_price=max_price, interval=interval, quantity=quantity)),
         "{{PRICE}}": "" if max_price is None else f"{max_price:g}",
         "{{INTERVAL}}": f"{interval:g}",

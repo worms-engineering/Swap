@@ -18,6 +18,16 @@ pagina di verifica il segnalibro si ferma.
    blu nella barra dei preferiti.
 3. Vai sulla pagina dell'evento su TicketSwap e clicca il segnalibro.
 
+### Prezzi originali
+
+Dalla stessa pagina trascina anche il segnalibro **💶 Prezzi originali**. Sulla pagina dell'evento
+aggiunge sotto ogni annuncio il prezzo originale del biglietto indicato dal venditore e la differenza
+in percentuale (verde = sotto l'originale, giallo = fino al +10%, rosso = oltre), più un riquadro con i
+migliori affari. Per trovarlo apre gli annunci uno alla volta in background (circa un secondo
+ciascuno) e salva i risultati nel browser, quindi ogni annuncio viene letto una volta sola. Se un
+annuncio non riporta il prezzo originale compare "n.d.". Il prezzo su TicketSwap include le
+commissioni, quindi anche un biglietto venduto al prezzo originale risulta qualche punto sopra lo 0%.
+
 Per rigenerare la pagina con valori predefiniti diversi:
 `python -m ticketswap_bot bookmarklet --trigger-price 100 --quantity 2`.
 

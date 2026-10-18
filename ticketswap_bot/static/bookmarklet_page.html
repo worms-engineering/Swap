@@ -30,8 +30,9 @@
 <body>
 <main>
   <h1>🎟️ TicketSwap Alert</h1>
-  <p class="lead">Un segnalibro che controlla gli annunci di un evento ogni ~20 secondi e suona un allarme
-    quando un biglietto arriva al tuo prezzo. Non compra nulla da solo: l'acquisto lo fai tu.</p>
+  <p class="lead">Due segnalibri per la pagina di un evento su TicketSwap: un <b>allarme</b> che suona quando
+    un biglietto arriva al tuo prezzo e i <b>prezzi originali</b> accanto a ogni annuncio, per capire
+    subito quali sono gli affari. Nessuno dei due compra nulla da solo: l'acquisto lo fai tu.</p>
 
   <section class="card">
     <h2>1. Imposta il segnalibro</h2>
@@ -56,7 +57,18 @@
   </section>
 
   <section class="card">
-    <h2>3. Usalo</h2>
+    <h2>Extra: prezzi originali</h2>
+    <a id="bm-prices" class="drag" href="{{PRICES_HREF}}" onclick="event.preventDefault(); alert('Non cliccarlo qui: trascinalo nella barra dei preferiti.');">💶 Prezzi originali</a>
+    <p class="hint">Trascina anche questo nella barra dei preferiti. Sulla pagina dell'evento cliccalo: sotto ogni
+      annuncio compare il prezzo originale del biglietto e la differenza in percentuale
+      (<span style="color:#11703a">verde</span> = sotto il prezzo originale,
+      <span style="color:#8a5a00">giallo</span> = fino al +10%, <span style="color:#a31b1b">rosso</span> = oltre).
+      Legge gli annunci uno alla volta, quindi ci mette circa un secondo per annuncio; i risultati
+      restano salvati nel browser, così la volta dopo è immediato.</p>
+  </section>
+
+  <section class="card">
+    <h2>3. Usa l'allarme</h2>
     <ol>
       <li>Apri TicketSwap nel tuo browser, accedi e vai alla pagina dell'evento (quella con l'elenco degli annunci).</li>
       <li>Clicca il segnalibro <b>🎟️ TicketSwap Alert</b>: in basso a destra compare un riquadro.
